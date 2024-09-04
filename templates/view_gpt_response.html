@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repository Analysis Status</title>
-    <meta http-equiv="refresh" content="5"> <!-- Refresh every 5 seconds -->
+    <title>View GPT Response</title>
     <style>
         body {
             display: flex;
@@ -20,6 +19,16 @@
             background: white;
             border-radius: 15px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        pre {
+            text-align: left;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 300px;
+            overflow-y: auto;
         }
         button {
             margin-top: 20px;
@@ -39,14 +48,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>Analysis Status</h1>
-        <p>{{ progress['status'] }}</p>
-        {% if 'complete' in progress['status'].lower() %}
-        <form method="post" action="/send_to_gpt">
-            <button type="submit">Send to GPT</button>
-        </form>
-        <a href="/view_gpt_response"><button>View GPT Response</button></a>
-        {% endif %}
+        <h1>GPT Response</h1>
+        <pre>{{ content }}</pre>
         <a href="/"><button>Back to Home</button></a>
     </div>
 </body>
