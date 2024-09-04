@@ -1,5 +1,7 @@
 # data_manager.py
 
+import os  # Add this line to import the 'os' module
+
 class AnalysisData:
     def __init__(self):
         self.repo_path = os.getcwd()

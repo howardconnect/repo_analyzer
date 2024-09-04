@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repository Analysis Status</title>
-    <meta http-equiv="refresh" content="5"> <!-- Refresh every 5 seconds -->
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
     <style>
         body {
             display: flex;
@@ -20,6 +19,8 @@
             background: white;
             border-radius: 15px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
         }
         button {
             margin-top: 20px;
@@ -39,15 +40,9 @@
 </head>
 <body>
     <div class="container">
-        <h1>Analysis Status</h1>
-        <p>{{ progress['status'] }}</p>
-        {% if 'complete' in progress['status'].lower() %}
-        <a href="/view_analysis"><button>View Analysis Results</button></a>
-        <form method="post" action="/send_to_gpt">
-            <button type="submit">Send to GPT</button>
-        </form>
-        {% endif %}
-        <a href="/"><button>Back to Home</button></a>
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
     </div>
 </body>
 </html>

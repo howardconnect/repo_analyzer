@@ -1,0 +1,3392 @@
+<div class='file-section'><h2>.gitignore</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\.gitignore</p><pre><code class='language-python'># Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+
+#Enviroments
+.env
+.env/
+.venv
+.venv/</code></pre></div>
+
+<div class='file-section'><h2>data_manager.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\data_manager.py</p><pre><code class='language-python'># data_manager.py
+
+import os  # Add this line to import the 'os' module
+
+class AnalysisData:
+    def __init__(self):
+        self.repo_path = os.getcwd()
+        self.transcripts = {}
+        self.gpt_responses = {}
+
+    def add_transcript(self, file_name, content):
+        """Add transcript data to the storage."""
+        self.transcripts[file_name] = content
+
+    def add_gpt_response(self, file_name, response):
+        """Add GPT response data to the storage."""
+        self.gpt_responses[file_name] = response
+
+    def get_transcript(self, file_name):
+        """Retrieve a transcript by filename."""
+        return self.transcripts.get(file_name, "")
+
+    def get_gpt_response(self, file_name):
+        """Retrieve a GPT response by filename."""
+        return self.gpt_responses.get(file_name, "")
+</code></pre></div>
+
+<div class='file-section'><h2>flask_app.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\flask_app.py</p><pre><code class='language-python'>from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
+import threading
+from queue import Queue
+from dotenv import load_dotenv
+import webbrowser
+import time
+import signal
+import subprocess
+from utils import format_filename, remove_extension
+from data_manager import AnalysisData
+
+app = Flask(__name__)
+
+# Add a custom filter to use in the Jinja2 template
+app.jinja_env.filters['remove_extension'] = remove_extension
+
+# Load environment variables
+load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize data manager
+data_manager = AnalysisData()
+
+repo_path = os.getcwd()  # Default repo path is the current working directory
+progress = {"status": "", "details": "", "percent": 0, "lines_analyzed": 0, "characters_analyzed": 0}
+gpt_processing = False  # Flag to track GPT processing status
+
+# Set the output directory
+main_transcript_dir = os.path.join(repo_path, 'processed_transcripts')
+summary_file_path = os.path.join(main_transcript_dir, 'repo_summary.txt')
+
+def create_directories():
+    """Create required directories if they do not exist."""
+    if not os.path.exists(main_transcript_dir):
+        os.makedirs(main_transcript_dir)
+
+def analyze_repo_files(repo_path):
+    """Analyzes repository files and processes them."""
+    global progress
+    progress['status'] = 'Analyzing'
+    progress['details'] = 'Repository analysis is in progress...'
+    progress['percent'] = 0
+    progress['lines_analyzed'] = 0
+    progress['characters_analyzed'] = 0
+
+    include_extensions = ['.py', '.gitignore', 'Dockerfile', '.yaml', '.yml', 'docker-compose', '.html', '.md', '.txt']
+    exclude_dirs = {'venv', '.env', '__pycache__', '.git', '.github'}
+    exclude_files = {'.env', '.DS_Store'}
+
+    analysis_content = []
+    total_files = 0
+    processed_files = 0
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                total_files += 1
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    data_manager.add_transcript(file_name, content)
+                    analysis_content.append(f"<div class='file-section'><h2>{file_name}</h2><p>### File Path: {file_path}</p><pre><code class='language-python'>{content}</code></pre></div>")
+                    progress['lines_analyzed'] += content.count('\n') + 1
+                    progress['characters_analyzed'] += len(content)
+
+                processed_files += 1
+                progress['percent'] = int((processed_files / total_files) * 100)
+                progress['details'] = f"Processing file {processed_files} of {total_files}..."
+
+    create_directories()  # Ensure the directory exists before writing the summary file
+    with open(summary_file_path, 'w', encoding='utf-8') as summary_file:
+        summary_file.write('\n\n'.join(analysis_content))
+
+    progress['status'] = 'Complete'
+    progress['details'] = 'The repository analysis has been completed successfully.'
+@app.route('/')
+def index():
+    """Render the main page with the contents of the current directory."""
+    files = os.listdir(repo_path)
+    return render_template('index.html', files=files, root_directory=repo_path)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Handle the repository analysis request."""
+    global gpt_processing
+    gpt_processing = True
+
+    directory_to_analyze = request.form.get('directory', repo_path)
+    threading.Thread(target=analyze_repo_files, args=(directory_to_analyze,)).start()
+
+    return redirect(url_for('analysis_complete'))
+
+@app.route('/analysis_complete')
+def analysis_complete():
+    """Check the status of the analysis and show the complete results."""
+    report_content = ""
+
+    if os.path.exists(summary_file_path):
+        with open(summary_file_path, 'r', encoding='utf-8') as summary_file:
+            report_content = summary_file.read()
+
+    return render_template('analysis_complete.html', progress=progress, report_content=report_content)
+
+@app.route('/trigger_gpt')
+def trigger_gpt():
+    """Trigger the GPT processing."""
+    # Implement the GPT processing logic here
+    return "GPT processing initiated."
+
+def open_browser():
+    """Open the Flask app in a new browser window and monitor the process."""
+    url = 'http://127.0.0.1:5000'
+    browser_process = subprocess.Popen(['python', '-m', 'webbrowser', '-t', url])
+    return browser_process
+
+if __name__ == '__main__':
+    create_directories()
+    browser_process = open_browser()
+    try:
+        app.run(debug=True, use_reloader=False)
+    finally:
+        browser_process.terminate()
+        browser_process.wait()</code></pre></div>
+
+<div class='file-section'><h2>README.md</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\README.md</p><pre><code class='language-python'># repo_analyzer
+This code analyzes a repository and send it to GPT for project code analysis and overview.
+</code></pre></div>
+
+<div class='file-section'><h2>requirements.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\requirements.txt</p><pre><code class='language-python'>a i o h a p p y e y e b a l l s = = 2 . 4 . 0 
+ 
+ a i o h t t p = = 3 . 1 0 . 5 
+ 
+ a i o s i g n a l = = 1 . 3 . 1 
+ 
+ a t t r s = = 2 4 . 2 . 0 
+ 
+ b l i n k e r = = 1 . 8 . 2 
+ 
+ c e r t i f i = = 2 0 2 4 . 8 . 3 0 
+ 
+ c h a r s e t - n o r m a l i z e r = = 3 . 3 . 2 
+ 
+ c l i c k = = 8 . 1 . 7 
+ 
+ c o l o r a m a = = 0 . 4 . 6 
+ 
+ F l a s k = = 3 . 0 . 3 
+ 
+ f r o z e n l i s t = = 1 . 4 . 1 
+ 
+ i d n a = = 3 . 8 
+ 
+ i t s d a n g e r o u s = = 2 . 2 . 0 
+ 
+ J i n j a 2 = = 3 . 1 . 4 
+ 
+ M a r k d o w n = = 3 . 7 
+ 
+ M a r k u p S a f e = = 2 . 1 . 5 
+ 
+ m u l t i d i c t = = 6 . 0 . 5 
+ 
+ n o d e = = 1 . 2 . 2 
+ 
+ o d i c t = = 1 . 9 . 0 
+ 
+ o p e n a i = = 0 . 2 8 . 0 
+ 
+ p l u m b e r = = 1 . 7 
+ 
+ p y t h o n - d o t e n v = = 1 . 0 . 1 
+ 
+ r e q u e s t s = = 2 . 3 2 . 3 
+ 
+ s e t u p t o o l s = = 7 4 . 1 . 1 
+ 
+ t q d m = = 4 . 6 6 . 5 
+ 
+ u r l l i b 3 = = 2 . 2 . 2 
+ 
+ W e r k z e u g = = 3 . 0 . 4 
+ 
+ y a r l = = 1 . 9 . 8 
+ 
+ z o p e . c o m p o n e n t = = 6 . 0 
+ 
+ z o p e . d e f e r r e d i m p o r t = = 5 . 0 
+ 
+ z o p e . d e p r e c a t i o n = = 5 . 0 
+ 
+ z o p e . e v e n t = = 5 . 0 
+ 
+ z o p e . h o o k a b l e = = 6 . 0 
+ 
+ z o p e . i n t e r f a c e = = 7 . 0 . 3 
+ 
+ z o p e . l i f e c y c l e e v e n t = = 5 . 0 
+ 
+ z o p e . p r o x y = = 5 . 3 
+ 
+ </code></pre></div>
+
+<div class='file-section'><h2>send_to_gpt.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\send_to_gpt.py</p><pre><code class='language-python'>import os
+import openai
+from dotenv import load_dotenv
+
+def load_env():
+    """Load environment variables from the .env file."""
+    load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+
+def chunk_text(text, chunk_size):
+    """Splits the text into chunks of a specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def send_to_gpt(transcript_file_path):
+    """Sends file contents to GPT and stores the overview in the result file."""
+    load_env()
+    gpt_response_path = os.path.join(os.path.dirname(transcript_file_path), 'gpt_response.txt')
+
+    # Read transcript content
+    with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+    
+    chunks = chunk_text(transcript_content, 4000)  # Adjust the chunk size if needed
+    total_chunks = len(chunks)
+
+    # Send chunks to GPT and save responses
+    with open(gpt_response_path, 'w', encoding='utf-8') as output_file:
+        for i, chunk in enumerate(chunks):
+            prompt = f"Analyze the following chunk of code from a repository:\n\n{chunk}"
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use your preferred model
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    n=1,
+                    temperature=0.5
+                )
+                result = response.choices[0].message['content'].strip()
+                output_file.write(f"\n\n--- Response for chunk {i + 1} of {total_chunks} ---\n\n{result}\n")
+                print(f"Chunk {i + 1} of {total_chunks} analyzed successfully.")
+            except Exception as e:
+                print(f"Error processing chunk {i + 1}: {e}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python send_to_gpt.py <repo_path>")
+        sys.exit(1)
+    
+    repo_path = sys.argv[1]
+    transcript_file_path = os.path.join(repo_path, 'repo_transcript.txt')
+    send_to_gpt(transcript_file_path)
+</code></pre></div>
+
+<div class='file-section'><h2>utils.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\utils.py</p><pre><code class='language-python'># utils.py
+import re
+
+def format_filename(name):
+    """Sanitize and format filenames."""
+    # Remove any invalid characters and replace spaces with underscores
+    return re.sub(r'[^\w\-_\. ]', '_', name).strip()
+
+def remove_extension(file_name, extension='.html'):
+    """Remove a specific extension from a filename."""
+    if file_name.endswith(extension):
+        return file_name[:-len(extension)]
+    return file_name
+</code></pre></div>
+
+<div class='file-section'><h2>repo_summary.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\processed_transcripts\repo_summary.txt</p><pre><code class='language-python'><div class='file-section'><h2>.gitignore</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\.gitignore</p><pre><code># Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+
+#Enviroments
+.env
+.env/
+.venv
+.venv/</code></pre></div>
+
+<div class='file-section'><h2>data_manager.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\data_manager.py</p><pre><code># data_manager.py
+
+import os  # Add this line to import the 'os' module
+
+class AnalysisData:
+    def __init__(self):
+        self.repo_path = os.getcwd()
+        self.transcripts = {}
+        self.gpt_responses = {}
+
+    def add_transcript(self, file_name, content):
+        """Add transcript data to the storage."""
+        self.transcripts[file_name] = content
+
+    def add_gpt_response(self, file_name, response):
+        """Add GPT response data to the storage."""
+        self.gpt_responses[file_name] = response
+
+    def get_transcript(self, file_name):
+        """Retrieve a transcript by filename."""
+        return self.transcripts.get(file_name, "")
+
+    def get_gpt_response(self, file_name):
+        """Retrieve a GPT response by filename."""
+        return self.gpt_responses.get(file_name, "")
+</code></pre></div>
+
+<div class='file-section'><h2>flask_app.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\flask_app.py</p><pre><code>from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
+import threading
+from queue import Queue
+from dotenv import load_dotenv
+import webbrowser
+import time
+import signal
+import subprocess
+from utils import format_filename, remove_extension
+from data_manager import AnalysisData
+
+app = Flask(__name__)
+
+# Add a custom filter to use in the Jinja2 template
+app.jinja_env.filters['remove_extension'] = remove_extension
+
+# Load environment variables
+load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize data manager
+data_manager = AnalysisData()
+
+repo_path = os.getcwd()  # Default repo path is the current working directory
+progress = {"status": "", "details": "", "percent": 0, "lines_analyzed": 0, "characters_analyzed": 0}
+gpt_processing = False  # Flag to track GPT processing status
+
+# Set the output directory
+main_transcript_dir = os.path.join(repo_path, 'processed_transcripts')
+summary_file_path = os.path.join(main_transcript_dir, 'repo_summary.txt')
+
+def create_directories():
+    """Create required directories if they do not exist."""
+    if not os.path.exists(main_transcript_dir):
+        os.makedirs(main_transcript_dir)
+
+def analyze_repo_files(repo_path):
+    """Analyzes repository files and processes them."""
+    global progress
+    progress['status'] = 'Analyzing'
+    progress['details'] = 'Repository analysis is in progress...'
+    progress['percent'] = 0
+    progress['lines_analyzed'] = 0
+    progress['characters_analyzed'] = 0
+
+    include_extensions = ['.py', '.gitignore', 'Dockerfile', '.yaml', '.yml', 'docker-compose', '.html', '.md', '.txt']
+    exclude_dirs = {'venv', '.env', '__pycache__', '.git', '.github'}
+    exclude_files = {'.env', '.DS_Store'}
+
+    analysis_content = []
+    total_files = 0
+    processed_files = 0
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                total_files += 1
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    data_manager.add_transcript(file_name, content)
+                    analysis_content.append(f"<div class='file-section'><h2>{file_name}</h2><p>### File Path: {file_path}</p><pre><code>{content}</code></pre></div>")
+                    progress['lines_analyzed'] += content.count('\n') + 1
+                    progress['characters_analyzed'] += len(content)
+
+                processed_files += 1
+                progress['percent'] = int((processed_files / total_files) * 100)
+                progress['details'] = f"Processing file {processed_files} of {total_files}..."
+
+    create_directories()  # Ensure the directory exists before writing the summary file
+    with open(summary_file_path, 'w', encoding='utf-8') as summary_file:
+        summary_file.write('\n\n'.join(analysis_content))
+
+    progress['status'] = 'Complete'
+    progress['details'] = 'The repository analysis has been completed successfully.'
+
+@app.route('/')
+def index():
+    """Render the main page with the contents of the current directory."""
+    files = os.listdir(repo_path)
+    return render_template('index.html', files=files, root_directory=repo_path)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Handle the repository analysis request."""
+    global gpt_processing
+    gpt_processing = True
+
+    directory_to_analyze = request.form.get('directory', repo_path)
+    threading.Thread(target=analyze_repo_files, args=(directory_to_analyze,)).start()
+
+    return redirect(url_for('analysis_complete'))
+
+@app.route('/analysis_complete')
+def analysis_complete():
+    """Check the status of the analysis and show the complete results."""
+    report_content = ""
+
+    if os.path.exists(summary_file_path):
+        with open(summary_file_path, 'r', encoding='utf-8') as summary_file:
+            report_content = summary_file.read()
+
+    return render_template('analysis_complete.html', progress=progress, report_content=report_content)
+
+@app.route('/trigger_gpt')
+def trigger_gpt():
+    """Trigger the GPT processing."""
+    # Implement the GPT processing logic here
+    return "GPT processing initiated."
+
+def open_browser():
+    """Open the Flask app in a new browser window and monitor the process."""
+    url = 'http://127.0.0.1:5000'
+    browser_process = subprocess.Popen(['python', '-m', 'webbrowser', '-t', url])
+    return browser_process
+
+if __name__ == '__main__':
+    create_directories()
+    browser_process = open_browser()
+    try:
+        app.run(debug=True, use_reloader=False)
+    finally:
+        browser_process.terminate()
+        browser_process.wait()</code></pre></div>
+
+<div class='file-section'><h2>README.md</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\README.md</p><pre><code># repo_analyzer
+This code analyzes a repository and send it to GPT for project code analysis and overview.
+</code></pre></div>
+
+<div class='file-section'><h2>requirements.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\requirements.txt</p><pre><code>a i o h a p p y e y e b a l l s = = 2 . 4 . 0 
+ 
+ a i o h t t p = = 3 . 1 0 . 5 
+ 
+ a i o s i g n a l = = 1 . 3 . 1 
+ 
+ a t t r s = = 2 4 . 2 . 0 
+ 
+ b l i n k e r = = 1 . 8 . 2 
+ 
+ c e r t i f i = = 2 0 2 4 . 8 . 3 0 
+ 
+ c h a r s e t - n o r m a l i z e r = = 3 . 3 . 2 
+ 
+ c l i c k = = 8 . 1 . 7 
+ 
+ c o l o r a m a = = 0 . 4 . 6 
+ 
+ F l a s k = = 3 . 0 . 3 
+ 
+ f r o z e n l i s t = = 1 . 4 . 1 
+ 
+ i d n a = = 3 . 8 
+ 
+ i t s d a n g e r o u s = = 2 . 2 . 0 
+ 
+ J i n j a 2 = = 3 . 1 . 4 
+ 
+ M a r k d o w n = = 3 . 7 
+ 
+ M a r k u p S a f e = = 2 . 1 . 5 
+ 
+ m u l t i d i c t = = 6 . 0 . 5 
+ 
+ n o d e = = 1 . 2 . 2 
+ 
+ o d i c t = = 1 . 9 . 0 
+ 
+ o p e n a i = = 0 . 2 8 . 0 
+ 
+ p l u m b e r = = 1 . 7 
+ 
+ p y t h o n - d o t e n v = = 1 . 0 . 1 
+ 
+ r e q u e s t s = = 2 . 3 2 . 3 
+ 
+ s e t u p t o o l s = = 7 4 . 1 . 1 
+ 
+ t q d m = = 4 . 6 6 . 5 
+ 
+ u r l l i b 3 = = 2 . 2 . 2 
+ 
+ W e r k z e u g = = 3 . 0 . 4 
+ 
+ y a r l = = 1 . 9 . 8 
+ 
+ z o p e . c o m p o n e n t = = 6 . 0 
+ 
+ z o p e . d e f e r r e d i m p o r t = = 5 . 0 
+ 
+ z o p e . d e p r e c a t i o n = = 5 . 0 
+ 
+ z o p e . e v e n t = = 5 . 0 
+ 
+ z o p e . h o o k a b l e = = 6 . 0 
+ 
+ z o p e . i n t e r f a c e = = 7 . 0 . 3 
+ 
+ z o p e . l i f e c y c l e e v e n t = = 5 . 0 
+ 
+ z o p e . p r o x y = = 5 . 3 
+ 
+ </code></pre></div>
+
+<div class='file-section'><h2>send_to_gpt.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\send_to_gpt.py</p><pre><code>import os
+import openai
+from dotenv import load_dotenv
+
+def load_env():
+    """Load environment variables from the .env file."""
+    load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+
+def chunk_text(text, chunk_size):
+    """Splits the text into chunks of a specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def send_to_gpt(transcript_file_path):
+    """Sends file contents to GPT and stores the overview in the result file."""
+    load_env()
+    gpt_response_path = os.path.join(os.path.dirname(transcript_file_path), 'gpt_response.txt')
+
+    # Read transcript content
+    with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+    
+    chunks = chunk_text(transcript_content, 4000)  # Adjust the chunk size if needed
+    total_chunks = len(chunks)
+
+    # Send chunks to GPT and save responses
+    with open(gpt_response_path, 'w', encoding='utf-8') as output_file:
+        for i, chunk in enumerate(chunks):
+            prompt = f"Analyze the following chunk of code from a repository:\n\n{chunk}"
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use your preferred model
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    n=1,
+                    temperature=0.5
+                )
+                result = response.choices[0].message['content'].strip()
+                output_file.write(f"\n\n--- Response for chunk {i + 1} of {total_chunks} ---\n\n{result}\n")
+                print(f"Chunk {i + 1} of {total_chunks} analyzed successfully.")
+            except Exception as e:
+                print(f"Error processing chunk {i + 1}: {e}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python send_to_gpt.py <repo_path>")
+        sys.exit(1)
+    
+    repo_path = sys.argv[1]
+    transcript_file_path = os.path.join(repo_path, 'repo_transcript.txt')
+    send_to_gpt(transcript_file_path)
+</code></pre></div>
+
+<div class='file-section'><h2>utils.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\utils.py</p><pre><code># utils.py
+import re
+
+def format_filename(name):
+    """Sanitize and format filenames."""
+    # Remove any invalid characters and replace spaces with underscores
+    return re.sub(r'[^\w\-_\. ]', '_', name).strip()
+
+def remove_extension(file_name, extension='.html'):
+    """Remove a specific extension from a filename."""
+    if file_name.endswith(extension):
+        return file_name[:-len(extension)]
+    return file_name
+</code></pre></div>
+
+<div class='file-section'><h2>repo_summary.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\processed_transcripts\repo_summary.txt</p><pre><code><div class='file-section'><h2>.gitignore</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\.gitignore</p><pre><code># Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+
+#Enviroments
+.env
+.env/
+.venv
+.venv/</code></pre></div>
+
+<div class='file-section'><h2>data_manager.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\data_manager.py</p><pre><code># data_manager.py
+
+import os  # Add this line to import the 'os' module
+
+class AnalysisData:
+    def __init__(self):
+        self.repo_path = os.getcwd()
+        self.transcripts = {}
+        self.gpt_responses = {}
+
+    def add_transcript(self, file_name, content):
+        """Add transcript data to the storage."""
+        self.transcripts[file_name] = content
+
+    def add_gpt_response(self, file_name, response):
+        """Add GPT response data to the storage."""
+        self.gpt_responses[file_name] = response
+
+    def get_transcript(self, file_name):
+        """Retrieve a transcript by filename."""
+        return self.transcripts.get(file_name, "")
+
+    def get_gpt_response(self, file_name):
+        """Retrieve a GPT response by filename."""
+        return self.gpt_responses.get(file_name, "")
+</code></pre></div>
+
+<div class='file-section'><h2>flask_app.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\flask_app.py</p><pre><code>from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
+import threading
+from queue import Queue
+from dotenv import load_dotenv
+import webbrowser
+import time
+import signal
+import subprocess
+from utils import format_filename, remove_extension
+from data_manager import AnalysisData
+
+app = Flask(__name__)
+
+# Add a custom filter to use in the Jinja2 template
+app.jinja_env.filters['remove_extension'] = remove_extension
+
+# Load environment variables
+load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize data manager
+data_manager = AnalysisData()
+
+repo_path = os.getcwd()  # Default repo path is the current working directory
+progress = {"status": "", "details": "", "percent": 0, "lines_analyzed": 0, "characters_analyzed": 0}
+gpt_processing = False  # Flag to track GPT processing status
+
+# Set the output directory
+main_transcript_dir = os.path.join(repo_path, 'processed_transcripts')
+summary_file_path = os.path.join(main_transcript_dir, 'repo_summary.txt')
+
+def create_directories():
+    """Create required directories if they do not exist."""
+    if not os.path.exists(main_transcript_dir):
+        os.makedirs(main_transcript_dir)
+
+def analyze_repo_files(repo_path):
+    """Analyzes repository files and processes them."""
+    global progress
+    progress['status'] = 'Analyzing'
+    progress['details'] = 'Repository analysis is in progress...'
+    progress['percent'] = 0
+    progress['lines_analyzed'] = 0
+    progress['characters_analyzed'] = 0
+
+    include_extensions = ['.py', '.gitignore', 'Dockerfile', '.yaml', '.yml', 'docker-compose', '.html', '.md', '.txt']
+    exclude_dirs = {'venv', '.env', '__pycache__', '.git', '.github'}
+    exclude_files = {'.env', '.DS_Store'}
+
+    analysis_content = []
+    total_files = 0
+    processed_files = 0
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                total_files += 1
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    data_manager.add_transcript(file_name, content)
+                    analysis_content.append(f"<div class='file-section'><h2>{file_name}</h2><p>### File Path: {file_path}</p><pre><code>{content}</code></pre></div>")
+                    progress['lines_analyzed'] += content.count('\n') + 1
+                    progress['characters_analyzed'] += len(content)
+
+                processed_files += 1
+                progress['percent'] = int((processed_files / total_files) * 100)
+                progress['details'] = f"Processing file {processed_files} of {total_files}..."
+
+    create_directories()  # Ensure the directory exists before writing the summary file
+    with open(summary_file_path, 'w', encoding='utf-8') as summary_file:
+        summary_file.write('\n\n'.join(analysis_content))
+
+    progress['status'] = 'Complete'
+    progress['details'] = 'The repository analysis has been completed successfully.'
+
+@app.route('/')
+def index():
+    """Render the main page with the contents of the current directory."""
+    files = os.listdir(repo_path)
+    return render_template('index.html', files=files, root_directory=repo_path)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Handle the repository analysis request."""
+    global gpt_processing
+    gpt_processing = True
+
+    directory_to_analyze = request.form.get('directory', repo_path)
+    threading.Thread(target=analyze_repo_files, args=(directory_to_analyze,)).start()
+
+    return redirect(url_for('analysis_complete'))
+
+@app.route('/analysis_complete')
+def analysis_complete():
+    """Check the status of the analysis and show the complete results."""
+    report_content = ""
+
+    if os.path.exists(summary_file_path):
+        with open(summary_file_path, 'r', encoding='utf-8') as summary_file:
+            report_content = summary_file.read()
+
+    return render_template('analysis_complete.html', progress=progress, report_content=report_content)
+
+@app.route('/trigger_gpt')
+def trigger_gpt():
+    """Trigger the GPT processing."""
+    # Implement the GPT processing logic here
+    return "GPT processing initiated."
+
+def open_browser():
+    """Open the Flask app in a new browser window and monitor the process."""
+    url = 'http://127.0.0.1:5000'
+    browser_process = subprocess.Popen(['python', '-m', 'webbrowser', '-t', url])
+    return browser_process
+
+if __name__ == '__main__':
+    create_directories()
+    browser_process = open_browser()
+    try:
+        app.run(debug=True, use_reloader=False)
+    finally:
+        browser_process.terminate()
+        browser_process.wait()</code></pre></div>
+
+<div class='file-section'><h2>README.md</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\README.md</p><pre><code># repo_analyzer
+This code analyzes a repository and send it to GPT for project code analysis and overview.
+</code></pre></div>
+
+<div class='file-section'><h2>requirements.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\requirements.txt</p><pre><code>a i o h a p p y e y e b a l l s = = 2 . 4 . 0 
+ 
+ a i o h t t p = = 3 . 1 0 . 5 
+ 
+ a i o s i g n a l = = 1 . 3 . 1 
+ 
+ a t t r s = = 2 4 . 2 . 0 
+ 
+ b l i n k e r = = 1 . 8 . 2 
+ 
+ c e r t i f i = = 2 0 2 4 . 8 . 3 0 
+ 
+ c h a r s e t - n o r m a l i z e r = = 3 . 3 . 2 
+ 
+ c l i c k = = 8 . 1 . 7 
+ 
+ c o l o r a m a = = 0 . 4 . 6 
+ 
+ F l a s k = = 3 . 0 . 3 
+ 
+ f r o z e n l i s t = = 1 . 4 . 1 
+ 
+ i d n a = = 3 . 8 
+ 
+ i t s d a n g e r o u s = = 2 . 2 . 0 
+ 
+ J i n j a 2 = = 3 . 1 . 4 
+ 
+ M a r k d o w n = = 3 . 7 
+ 
+ M a r k u p S a f e = = 2 . 1 . 5 
+ 
+ m u l t i d i c t = = 6 . 0 . 5 
+ 
+ n o d e = = 1 . 2 . 2 
+ 
+ o d i c t = = 1 . 9 . 0 
+ 
+ o p e n a i = = 0 . 2 8 . 0 
+ 
+ p l u m b e r = = 1 . 7 
+ 
+ p y t h o n - d o t e n v = = 1 . 0 . 1 
+ 
+ r e q u e s t s = = 2 . 3 2 . 3 
+ 
+ s e t u p t o o l s = = 7 4 . 1 . 1 
+ 
+ t q d m = = 4 . 6 6 . 5 
+ 
+ u r l l i b 3 = = 2 . 2 . 2 
+ 
+ W e r k z e u g = = 3 . 0 . 4 
+ 
+ y a r l = = 1 . 9 . 8 
+ 
+ z o p e . c o m p o n e n t = = 6 . 0 
+ 
+ z o p e . d e f e r r e d i m p o r t = = 5 . 0 
+ 
+ z o p e . d e p r e c a t i o n = = 5 . 0 
+ 
+ z o p e . e v e n t = = 5 . 0 
+ 
+ z o p e . h o o k a b l e = = 6 . 0 
+ 
+ z o p e . i n t e r f a c e = = 7 . 0 . 3 
+ 
+ z o p e . l i f e c y c l e e v e n t = = 5 . 0 
+ 
+ z o p e . p r o x y = = 5 . 3 
+ 
+ </code></pre></div>
+
+<div class='file-section'><h2>send_to_gpt.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\send_to_gpt.py</p><pre><code>import os
+import openai
+from dotenv import load_dotenv
+
+def load_env():
+    """Load environment variables from the .env file."""
+    load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+
+def chunk_text(text, chunk_size):
+    """Splits the text into chunks of a specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def send_to_gpt(transcript_file_path):
+    """Sends file contents to GPT and stores the overview in the result file."""
+    load_env()
+    gpt_response_path = os.path.join(os.path.dirname(transcript_file_path), 'gpt_response.txt')
+
+    # Read transcript content
+    with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+    
+    chunks = chunk_text(transcript_content, 4000)  # Adjust the chunk size if needed
+    total_chunks = len(chunks)
+
+    # Send chunks to GPT and save responses
+    with open(gpt_response_path, 'w', encoding='utf-8') as output_file:
+        for i, chunk in enumerate(chunks):
+            prompt = f"Analyze the following chunk of code from a repository:\n\n{chunk}"
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use your preferred model
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    n=1,
+                    temperature=0.5
+                )
+                result = response.choices[0].message['content'].strip()
+                output_file.write(f"\n\n--- Response for chunk {i + 1} of {total_chunks} ---\n\n{result}\n")
+                print(f"Chunk {i + 1} of {total_chunks} analyzed successfully.")
+            except Exception as e:
+                print(f"Error processing chunk {i + 1}: {e}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python send_to_gpt.py <repo_path>")
+        sys.exit(1)
+    
+    repo_path = sys.argv[1]
+    transcript_file_path = os.path.join(repo_path, 'repo_transcript.txt')
+    send_to_gpt(transcript_file_path)
+</code></pre></div>
+
+<div class='file-section'><h2>utils.py</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\utils.py</p><pre><code># utils.py
+import re
+
+def format_filename(name):
+    """Sanitize and format filenames."""
+    # Remove any invalid characters and replace spaces with underscores
+    return re.sub(r'[^\w\-_\. ]', '_', name).strip()
+
+def remove_extension(file_name, extension='.html'):
+    """Remove a specific extension from a filename."""
+    if file_name.endswith(extension):
+        return file_name[:-len(extension)]
+    return file_name
+</code></pre></div>
+
+<div class='file-section'><h2>repo_summary.txt</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\processed_transcripts\repo_summary.txt</p><pre><code>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\.gitignore
+```
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+
+#Enviroments
+.env
+.env/
+.venv
+.venv/
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\data_manager.py
+```
+# data_manager.py
+
+import os  # Add this line to import the 'os' module
+
+class AnalysisData:
+    def __init__(self):
+        self.repo_path = os.getcwd()
+        self.transcripts = {}
+        self.gpt_responses = {}
+
+    def add_transcript(self, file_name, content):
+        """Add transcript data to the storage."""
+        self.transcripts[file_name] = content
+
+    def add_gpt_response(self, file_name, response):
+        """Add GPT response data to the storage."""
+        self.gpt_responses[file_name] = response
+
+    def get_transcript(self, file_name):
+        """Retrieve a transcript by filename."""
+        return self.transcripts.get(file_name, "")
+
+    def get_gpt_response(self, file_name):
+        """Retrieve a GPT response by filename."""
+        return self.gpt_responses.get(file_name, "")
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\flask_app.py
+```
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
+import threading
+from queue import Queue
+from dotenv import load_dotenv
+import webbrowser
+import time
+import signal
+import subprocess
+from utils import format_filename, remove_extension
+from data_manager import AnalysisData
+
+app = Flask(__name__)
+
+# Add a custom filter to use in the Jinja2 template
+app.jinja_env.filters['remove_extension'] = remove_extension
+
+# Load environment variables
+load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize data manager
+data_manager = AnalysisData()
+
+repo_path = os.getcwd()  # Default repo path is the current working directory
+progress = {"status": "", "details": "", "percent": 0, "lines_analyzed": 0, "characters_analyzed": 0, "total_files": 0}
+gpt_processing = False  # Flag to track GPT processing status
+
+# Set the output directory
+main_transcript_dir = os.path.join(repo_path, 'processed_transcripts')
+summary_file_path = os.path.join(main_transcript_dir, 'repo_summary.txt')
+
+def create_directories():
+    """Create required directories if they do not exist."""
+    if not os.path.exists(main_transcript_dir):
+        os.makedirs(main_transcript_dir)
+
+def analyze_repo_files(repo_path):
+    """Analyzes repository files and processes them."""
+    global progress
+    progress['status'] = 'Analyzing'
+    progress['details'] = 'Repository analysis is in progress...'
+    progress['percent'] = 0
+    progress['lines_analyzed'] = 0
+    progress['characters_analyzed'] = 0
+    progress['total_files'] = 0
+
+    include_extensions = ['.py', '.gitignore', 'Dockerfile', '.yaml', '.yml', 'docker-compose', '.html', '.md', '.txt']
+    exclude_dirs = {'venv', '.env', '__pycache__', '.git', '.github'}
+    exclude_files = {'.env', '.DS_Store'}
+
+    analysis_content = []
+    total_files = 0
+    processed_files = 0
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                total_files += 1
+
+    progress['total_files'] = total_files
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    data_manager.add_transcript(file_name, content)
+                    analysis_content.append(f"### File Path: {file_path}\n```\n{content}\n```")
+                    progress['lines_analyzed'] += content.count('\n') + 1
+                    progress['characters_analyzed'] += len(content)
+
+                processed_files += 1
+                progress['percent'] = int((processed_files / total_files) * 100)
+                progress['details'] = f"Processing file {processed_files} of {total_files}..."
+
+    create_directories()  # Ensure the directory exists before writing the summary file
+    with open(summary_file_path, 'w', encoding='utf-8') as summary_file:
+        summary_file.write('\n\n'.join(analysis_content))
+
+    progress['status'] = 'Complete'
+    progress['details'] = 'The repository analysis has been completed successfully.'
+
+@app.route('/')
+def index():
+    """Render the main page with the contents of the current directory."""
+    files = os.listdir(repo_path)
+    return render_template('index.html', files=files, root_directory=repo_path)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Handle the repository analysis request."""
+    global gpt_processing
+    gpt_processing = True
+
+    directory_to_analyze = request.form.get('directory', repo_path)
+    threading.Thread(target=analyze_repo_files, args=(directory_to_analyze,)).start()
+
+    return redirect(url_for('analysis_complete'))
+
+@app.route('/analysis_complete')
+def analysis_complete():
+    """Check the status of the analysis and show the complete results."""
+    report_content = ""
+
+    if os.path.exists(summary_file_path):
+        with open(summary_file_path, 'r', encoding='utf-8') as summary_file:
+            report_content = summary_file.read()
+
+    return render_template('analysis_complete.html', progress=progress, report_content=report_content)
+
+@app.route('/trigger_gpt')
+def trigger_gpt():
+    """Trigger the GPT processing."""
+    # Implement the GPT processing logic here
+    return "GPT processing initiated."
+
+def open_browser():
+    """Open the Flask app in a new browser window and monitor the process."""
+    url = 'http://127.0.0.1:5000'
+    browser_process = subprocess.Popen(['python', '-m', 'webbrowser', '-t', url])
+    return browser_process
+
+if __name__ == '__main__':
+    create_directories()
+    browser_process = open_browser()
+    try:
+        app.run(debug=True, use_reloader=False)
+    finally:
+        browser_process.terminate()
+        browser_process.wait()
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\README.md
+```
+# repo_analyzer
+This code analyzes a repository and send it to GPT for project code analysis and overview.
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\requirements.txt
+```
+a i o h a p p y e y e b a l l s = = 2 . 4 . 0 
+ 
+ a i o h t t p = = 3 . 1 0 . 5 
+ 
+ a i o s i g n a l = = 1 . 3 . 1 
+ 
+ a t t r s = = 2 4 . 2 . 0 
+ 
+ b l i n k e r = = 1 . 8 . 2 
+ 
+ c e r t i f i = = 2 0 2 4 . 8 . 3 0 
+ 
+ c h a r s e t - n o r m a l i z e r = = 3 . 3 . 2 
+ 
+ c l i c k = = 8 . 1 . 7 
+ 
+ c o l o r a m a = = 0 . 4 . 6 
+ 
+ F l a s k = = 3 . 0 . 3 
+ 
+ f r o z e n l i s t = = 1 . 4 . 1 
+ 
+ i d n a = = 3 . 8 
+ 
+ i t s d a n g e r o u s = = 2 . 2 . 0 
+ 
+ J i n j a 2 = = 3 . 1 . 4 
+ 
+ M a r k d o w n = = 3 . 7 
+ 
+ M a r k u p S a f e = = 2 . 1 . 5 
+ 
+ m u l t i d i c t = = 6 . 0 . 5 
+ 
+ n o d e = = 1 . 2 . 2 
+ 
+ o d i c t = = 1 . 9 . 0 
+ 
+ o p e n a i = = 0 . 2 8 . 0 
+ 
+ p l u m b e r = = 1 . 7 
+ 
+ p y t h o n - d o t e n v = = 1 . 0 . 1 
+ 
+ r e q u e s t s = = 2 . 3 2 . 3 
+ 
+ s e t u p t o o l s = = 7 4 . 1 . 1 
+ 
+ t q d m = = 4 . 6 6 . 5 
+ 
+ u r l l i b 3 = = 2 . 2 . 2 
+ 
+ W e r k z e u g = = 3 . 0 . 4 
+ 
+ y a r l = = 1 . 9 . 8 
+ 
+ z o p e . c o m p o n e n t = = 6 . 0 
+ 
+ z o p e . d e f e r r e d i m p o r t = = 5 . 0 
+ 
+ z o p e . d e p r e c a t i o n = = 5 . 0 
+ 
+ z o p e . e v e n t = = 5 . 0 
+ 
+ z o p e . h o o k a b l e = = 6 . 0 
+ 
+ z o p e . i n t e r f a c e = = 7 . 0 . 3 
+ 
+ z o p e . l i f e c y c l e e v e n t = = 5 . 0 
+ 
+ z o p e . p r o x y = = 5 . 3 
+ 
+ 
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\send_to_gpt.py
+```
+import os
+import openai
+from dotenv import load_dotenv
+
+def load_env():
+    """Load environment variables from the .env file."""
+    load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+
+def chunk_text(text, chunk_size):
+    """Splits the text into chunks of a specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def send_to_gpt(transcript_file_path):
+    """Sends file contents to GPT and stores the overview in the result file."""
+    load_env()
+    gpt_response_path = os.path.join(os.path.dirname(transcript_file_path), 'gpt_response.txt')
+
+    # Read transcript content
+    with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+    
+    chunks = chunk_text(transcript_content, 4000)  # Adjust the chunk size if needed
+    total_chunks = len(chunks)
+
+    # Send chunks to GPT and save responses
+    with open(gpt_response_path, 'w', encoding='utf-8') as output_file:
+        for i, chunk in enumerate(chunks):
+            prompt = f"Analyze the following chunk of code from a repository:\n\n{chunk}"
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use your preferred model
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    n=1,
+                    temperature=0.5
+                )
+                result = response.choices[0].message['content'].strip()
+                output_file.write(f"\n\n--- Response for chunk {i + 1} of {total_chunks} ---\n\n{result}\n")
+                print(f"Chunk {i + 1} of {total_chunks} analyzed successfully.")
+            except Exception as e:
+                print(f"Error processing chunk {i + 1}: {e}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python send_to_gpt.py <repo_path>")
+        sys.exit(1)
+    
+    repo_path = sys.argv[1]
+    transcript_file_path = os.path.join(repo_path, 'repo_transcript.txt')
+    send_to_gpt(transcript_file_path)
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\utils.py
+```
+# utils.py
+import re
+
+def format_filename(name):
+    """Sanitize and format filenames."""
+    # Remove any invalid characters and replace spaces with underscores
+    return re.sub(r'[^\w\-_\. ]', '_', name).strip()
+
+def remove_extension(file_name, extension='.html'):
+    """Remove a specific extension from a filename."""
+    if file_name.endswith(extension):
+        return file_name[:-len(extension)]
+    return file_name
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\processed_transcripts\repo_summary.txt
+```
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\.gitignore
+```
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+.pybuilder/
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+#   For a library or package, you might want to ignore these files since the code is
+#   intended to run in multiple environments; otherwise, check them in:
+# .python-version
+
+# pipenv
+#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
+#   However, in case of collaboration, if having platform-specific dependencies or dependencies
+#   having no cross-platform support, pipenv may install dependencies that don't work, or not
+#   install all needed dependencies.
+#Pipfile.lock
+
+# poetry
+#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
+#   This is especially recommended for binary packages to ensure reproducibility, and is more
+#   commonly ignored for libraries.
+#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
+#poetry.lock
+
+# pdm
+#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
+#pdm.lock
+#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
+#   in version control.
+#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
+.pdm.toml
+.pdm-python
+.pdm-build/
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
+__pypackages__/
+
+# Celery stuff
+celerybeat-schedule
+celerybeat.pid
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# pytype static type analyzer
+.pytype/
+
+# Cython debug symbols
+cython_debug/
+
+# PyCharm
+#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
+#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
+#  and can be added to the global gitignore or merged into this file.  For a more nuclear
+#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
+#.idea/
+
+
+#Enviroments
+.env
+.env/
+.venv
+.venv/
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\data_manager.py
+```
+# data_manager.py
+
+import os  # Add this line to import the 'os' module
+
+class AnalysisData:
+    def __init__(self):
+        self.repo_path = os.getcwd()
+        self.transcripts = {}
+        self.gpt_responses = {}
+
+    def add_transcript(self, file_name, content):
+        """Add transcript data to the storage."""
+        self.transcripts[file_name] = content
+
+    def add_gpt_response(self, file_name, response):
+        """Add GPT response data to the storage."""
+        self.gpt_responses[file_name] = response
+
+    def get_transcript(self, file_name):
+        """Retrieve a transcript by filename."""
+        return self.transcripts.get(file_name, "")
+
+    def get_gpt_response(self, file_name):
+        """Retrieve a GPT response by filename."""
+        return self.gpt_responses.get(file_name, "")
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\flask_app.py
+```
+from flask import Flask, render_template, request, redirect, url_for, jsonify
+import os
+import threading
+from queue import Queue
+from dotenv import load_dotenv
+import webbrowser
+import time
+import signal
+import subprocess
+from utils import format_filename, remove_extension
+from data_manager import AnalysisData
+
+app = Flask(__name__)
+
+# Add a custom filter to use in the Jinja2 template
+app.jinja_env.filters['remove_extension'] = remove_extension
+
+# Load environment variables
+load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+openai_api_key = os.getenv('OPENAI_API_KEY')
+
+# Initialize data manager
+data_manager = AnalysisData()
+
+repo_path = os.getcwd()  # Default repo path is the current working directory
+progress = {"status": "", "details": "", "percent": 0, "lines_analyzed": 0, "characters_analyzed": 0, "total_files": 0}
+gpt_processing = False  # Flag to track GPT processing status
+
+# Set the output directory
+main_transcript_dir = os.path.join(repo_path, 'processed_transcripts')
+summary_file_path = os.path.join(main_transcript_dir, 'repo_summary.txt')
+
+def create_directories():
+    """Create required directories if they do not exist."""
+    if not os.path.exists(main_transcript_dir):
+        os.makedirs(main_transcript_dir)
+
+def analyze_repo_files(repo_path):
+    """Analyzes repository files and processes them."""
+    global progress
+    progress['status'] = 'Analyzing'
+    progress['details'] = 'Repository analysis is in progress...'
+    progress['percent'] = 0
+    progress['lines_analyzed'] = 0
+    progress['characters_analyzed'] = 0
+    progress['total_files'] = 0
+
+    include_extensions = ['.py', '.gitignore', 'Dockerfile', '.yaml', '.yml', 'docker-compose', '.html', '.md', '.txt']
+    exclude_dirs = {'venv', '.env', '__pycache__', '.git', '.github'}
+    exclude_files = {'.env', '.DS_Store'}
+
+    analysis_content = []
+    total_files = 0
+    processed_files = 0
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                total_files += 1
+
+    progress['total_files'] = total_files
+
+    for root, dirs, files in os.walk(repo_path):
+        dirs[:] = [d for d in dirs if d not in exclude_dirs]
+        for file_name in files:
+            if any(file_name.endswith(ext) for ext in include_extensions) and file_name not in exclude_files:
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    content = f.read()
+                    data_manager.add_transcript(file_name, content)
+                    analysis_content.append(f"### File Path: {file_path}\n```\n{content}\n```")
+                    progress['lines_analyzed'] += content.count('\n') + 1
+                    progress['characters_analyzed'] += len(content)
+
+                processed_files += 1
+                progress['percent'] = int((processed_files / total_files) * 100)
+                progress['details'] = f"Processing file {processed_files} of {total_files}..."
+
+    create_directories()  # Ensure the directory exists before writing the summary file
+    with open(summary_file_path, 'w', encoding='utf-8') as summary_file:
+        summary_file.write('\n\n'.join(analysis_content))
+
+    progress['status'] = 'Complete'
+    progress['details'] = 'The repository analysis has been completed successfully.'
+
+@app.route('/')
+def index():
+    """Render the main page with the contents of the current directory."""
+    files = os.listdir(repo_path)
+    return render_template('index.html', files=files, root_directory=repo_path)
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """Handle the repository analysis request."""
+    global gpt_processing
+    gpt_processing = True
+
+    directory_to_analyze = request.form.get('directory', repo_path)
+    threading.Thread(target=analyze_repo_files, args=(directory_to_analyze,)).start()
+
+    return redirect(url_for('analysis_complete'))
+
+@app.route('/analysis_complete')
+def analysis_complete():
+    """Check the status of the analysis and show the complete results."""
+    report_content = ""
+
+    if os.path.exists(summary_file_path):
+        with open(summary_file_path, 'r', encoding='utf-8') as summary_file:
+            report_content = summary_file.read()
+
+    return render_template('analysis_complete.html', progress=progress, report_content=report_content)
+
+@app.route('/trigger_gpt')
+def trigger_gpt():
+    """Trigger the GPT processing."""
+    # Implement the GPT processing logic here
+    return "GPT processing initiated."
+
+def open_browser():
+    """Open the Flask app in a new browser window and monitor the process."""
+    url = 'http://127.0.0.1:5000'
+    browser_process = subprocess.Popen(['python', '-m', 'webbrowser', '-t', url])
+    return browser_process
+
+if __name__ == '__main__':
+    create_directories()
+    browser_process = open_browser()
+    try:
+        app.run(debug=True, use_reloader=False)
+    finally:
+        browser_process.terminate()
+        browser_process.wait()
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\README.md
+```
+# repo_analyzer
+This code analyzes a repository and send it to GPT for project code analysis and overview.
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\requirements.txt
+```
+a i o h a p p y e y e b a l l s = = 2 . 4 . 0 
+ 
+ a i o h t t p = = 3 . 1 0 . 5 
+ 
+ a i o s i g n a l = = 1 . 3 . 1 
+ 
+ a t t r s = = 2 4 . 2 . 0 
+ 
+ b l i n k e r = = 1 . 8 . 2 
+ 
+ c e r t i f i = = 2 0 2 4 . 8 . 3 0 
+ 
+ c h a r s e t - n o r m a l i z e r = = 3 . 3 . 2 
+ 
+ c l i c k = = 8 . 1 . 7 
+ 
+ c o l o r a m a = = 0 . 4 . 6 
+ 
+ F l a s k = = 3 . 0 . 3 
+ 
+ f r o z e n l i s t = = 1 . 4 . 1 
+ 
+ i d n a = = 3 . 8 
+ 
+ i t s d a n g e r o u s = = 2 . 2 . 0 
+ 
+ J i n j a 2 = = 3 . 1 . 4 
+ 
+ M a r k d o w n = = 3 . 7 
+ 
+ M a r k u p S a f e = = 2 . 1 . 5 
+ 
+ m u l t i d i c t = = 6 . 0 . 5 
+ 
+ n o d e = = 1 . 2 . 2 
+ 
+ o d i c t = = 1 . 9 . 0 
+ 
+ o p e n a i = = 0 . 2 8 . 0 
+ 
+ p l u m b e r = = 1 . 7 
+ 
+ p y t h o n - d o t e n v = = 1 . 0 . 1 
+ 
+ r e q u e s t s = = 2 . 3 2 . 3 
+ 
+ s e t u p t o o l s = = 7 4 . 1 . 1 
+ 
+ t q d m = = 4 . 6 6 . 5 
+ 
+ u r l l i b 3 = = 2 . 2 . 2 
+ 
+ W e r k z e u g = = 3 . 0 . 4 
+ 
+ y a r l = = 1 . 9 . 8 
+ 
+ z o p e . c o m p o n e n t = = 6 . 0 
+ 
+ z o p e . d e f e r r e d i m p o r t = = 5 . 0 
+ 
+ z o p e . d e p r e c a t i o n = = 5 . 0 
+ 
+ z o p e . e v e n t = = 5 . 0 
+ 
+ z o p e . h o o k a b l e = = 6 . 0 
+ 
+ z o p e . i n t e r f a c e = = 7 . 0 . 3 
+ 
+ z o p e . l i f e c y c l e e v e n t = = 5 . 0 
+ 
+ z o p e . p r o x y = = 5 . 3 
+ 
+ 
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\send_to_gpt.py
+```
+import os
+import openai
+from dotenv import load_dotenv
+
+def load_env():
+    """Load environment variables from the .env file."""
+    load_dotenv(r"C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\transcript_training\.env")
+    openai.api_key = os.getenv('OPENAI_API_KEY')
+
+def chunk_text(text, chunk_size):
+    """Splits the text into chunks of a specified size."""
+    return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
+
+def send_to_gpt(transcript_file_path):
+    """Sends file contents to GPT and stores the overview in the result file."""
+    load_env()
+    gpt_response_path = os.path.join(os.path.dirname(transcript_file_path), 'gpt_response.txt')
+
+    # Read transcript content
+    with open(transcript_file_path, 'r', encoding='utf-8') as f:
+        transcript_content = f.read()
+    
+    chunks = chunk_text(transcript_content, 4000)  # Adjust the chunk size if needed
+    total_chunks = len(chunks)
+
+    # Send chunks to GPT and save responses
+    with open(gpt_response_path, 'w', encoding='utf-8') as output_file:
+        for i, chunk in enumerate(chunks):
+            prompt = f"Analyze the following chunk of code from a repository:\n\n{chunk}"
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-3.5-turbo",  # Use your preferred model
+                    messages=[{"role": "user", "content": prompt}],
+                    max_tokens=500,
+                    n=1,
+                    temperature=0.5
+                )
+                result = response.choices[0].message['content'].strip()
+                output_file.write(f"\n\n--- Response for chunk {i + 1} of {total_chunks} ---\n\n{result}\n")
+                print(f"Chunk {i + 1} of {total_chunks} analyzed successfully.")
+            except Exception as e:
+                print(f"Error processing chunk {i + 1}: {e}")
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) != 2:
+        print("Usage: python send_to_gpt.py <repo_path>")
+        sys.exit(1)
+    
+    repo_path = sys.argv[1]
+    transcript_file_path = os.path.join(repo_path, 'repo_transcript.txt')
+    send_to_gpt(transcript_file_path)
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\utils.py
+```
+# utils.py
+import re
+
+def format_filename(name):
+    """Sanitize and format filenames."""
+    # Remove any invalid characters and replace spaces with underscores
+    return re.sub(r'[^\w\-_\. ]', '_', name).strip()
+
+def remove_extension(file_name, extension='.html'):
+    """Remove a specific extension from a filename."""
+    if file_name.endswith(extension):
+        return file_name[:-len(extension)]
+    return file_name
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\analysis_complete.html
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Complete</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .header-container {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+        }
+        .header-container h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header-container p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .report-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+        }
+        .report-content {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            white-space: pre-wrap; /* Ensure text is wrapped */
+        }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #ddd;
+            z-index: 1000;
+        }
+        .button {
+            color: white;
+            background-color: #007bff;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Analysis Complete</h1>
+        <p>Processed {{ progress['details'] }}</p>
+        <p>Number of Lines Analyzed: {{ progress['lines_analyzed'] }}</p>
+        <p>Number of Characters Analyzed: {{ progress['characters_analyzed'] }}</p>
+    </div>
+
+    <div class="report-wrapper">
+        <div class="report-content">
+            <pre>{{ report_content }}</pre>
+        </div>
+
+        <div class="button-container">
+            <button onclick="copyToClipboard()" class="button">Copy to Clipboard</button>
+            <a href="{{ url_for('trigger_gpt') }}" class="button">Send to GPT</a>
+            <a href="{{ url_for('index') }}" class="button">Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            fetch('/static/processed_transcripts/repo_summary.txt')
+                .then(response => response.text())
+                .then(text => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Text copied to clipboard');
+                    }).catch(err => {
+                        alert('Failed to copy text: ', err);
+                    });
+                });
+        }
+    </script>
+</body>
+</html>
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\base.html
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
+    </div>
+</body>
+</html>
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\index.html
+```
+{% extends 'base.html' %}
+
+{% block title %}Home - Repository Analysis{% endblock %}
+
+{% block content %}
+<h1>Repository Analysis</h1>
+
+<!-- Form for Directory Selection -->
+<form method="POST" action="{{ url_for('analyze') }}" style="margin-top: 20px;">
+    <div style="margin-bottom: 20px;">
+        <label for="directory">Directory to Analyze:</label><br>
+        <!-- Pre-populate with the root directory of the repo and make the input field larger -->
+        <input type="text" id="directory" name="directory" value="{{ root_directory }}" style="width: 95%; font-size: 16px; padding: 8px;" required>
+        <!-- Button to choose another directory -->
+        <button type="button" onclick="chooseDirectory()" style="margin-top: 10px;">Choose Another Directory</button>
+    </div>
+    
+    <!-- Button to initiate analysis -->
+    <button type="submit" style="margin-top: 20px;">Get to Analyzing</button>
+</form>
+
+<script>
+    function chooseDirectory() {
+        // Use the file input dialog to select a directory (depends on the platform)
+        // This is a placeholder; handling directory selection dynamically depends on the web browser and may require server-side handling
+        alert("Directory selection feature depends on browser capabilities and requires additional setup.");
+    }
+</script>
+{% endblock %}
+```
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\analysis_complete.html
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Complete</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .header-container {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+        }
+        .header-container h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header-container p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .report-wrapper {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+        }
+        .report-content {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            white-space: pre-wrap; /* Ensure text is wrapped */
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+        }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #ddd;
+            z-index: 1000;
+        }
+        .button {
+            color: white;
+            background-color: #007bff;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Analysis Complete</h1>
+        <p>Processed {{ progress['details'] }}</p>
+        <p>Number of Lines Analyzed: {{ progress['lines_analyzed'] }}</p>
+        <p>Number of Characters Analyzed: {{ progress['characters_analyzed'] }}</p>
+    </div>
+
+    <div class="report-wrapper">
+        <div class="report-content">
+            <pre>{{ report_content }}</pre>
+        </div>
+
+        <div class="button-container">
+            <button onclick="copyToClipboard()" class="button">Copy to Clipboard</button>
+            <a href="{{ url_for('trigger_gpt') }}" class="button">Send to GPT</a>
+            <a href="{{ url_for('index') }}" class="button">Back to Home</a>
+        </div>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            fetch('/static/processed_transcripts/repo_summary.txt')
+                .then(response => response.text())
+                .then(text => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Text copied to clipboard');
+                    }).catch(err => {
+                        alert('Failed to copy text: ', err);
+                    });
+                });
+        }
+    </script>
+</body>
+</html>
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\base.html
+```
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
+    </div>
+</body>
+</html>
+
+```
+
+### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\index.html
+```
+{% extends 'base.html' %}
+
+{% block title %}Home - Repository Analysis{% endblock %}
+
+{% block content %}
+<h1>Repository Analysis</h1>
+
+<!-- Form for Directory Selection -->
+<form method="POST" action="{{ url_for('analyze') }}" style="margin-top: 20px;">
+    <div style="margin-bottom: 20px;">
+        <label for="directory">Directory to Analyze:</label><br>
+        <!-- Pre-populate with the root directory of the repo and make the input field larger -->
+        <input type="text" id="directory" name="directory" value="{{ root_directory }}" style="width: 95%; font-size: 16px; padding: 8px;" required>
+        <!-- Button to choose another directory -->
+        <button type="button" onclick="chooseDirectory()" style="margin-top: 10px;">Choose Another Directory</button>
+    </div>
+    
+    <!-- Button to initiate analysis -->
+    <button type="submit" style="margin-top: 20px;">Get to Analyzing</button>
+</form>
+
+<script>
+    function chooseDirectory() {
+        // Use the file input dialog to select a directory (depends on the platform)
+        // This is a placeholder; handling directory selection dynamically depends on the web browser and may require server-side handling
+        alert("Directory selection feature depends on browser capabilities and requires additional setup.");
+    }
+</script>
+{% endblock %}
+```</code></pre></div>
+
+<div class='file-section'><h2>analysis_complete.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\analysis_complete.html</p><pre><code><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Complete</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .header-container {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .header-container h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header-container p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .report-wrapper {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+            white-space: pre-wrap; /* Ensure text is wrapped */
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section h2 {
+            margin-top: 0;
+        }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .button {
+            color: white;
+            background-color: #007bff;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Analysis Complete</h1>
+        <p>Processed {{ progress['details'] }}</p>
+        <p>Number of Lines Analyzed: {{ progress['lines_analyzed'] }}</p>
+        <p>Number of Characters Analyzed: {{ progress['characters_analyzed'] }}</p>
+    </div>
+
+    <div class="report-wrapper">
+        {{ report_content|safe }}
+    </div>
+
+    <div class="button-container">
+        <button onclick="copyToClipboard()" class="button">Copy to Clipboard</button>
+        <a href="{{ url_for('trigger_gpt') }}" class="button">Send to GPT</a>
+        <a href="{{ url_for('index') }}" class="button">Back to Home</a>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            fetch('/static/processed_transcripts/repo_summary.txt')
+                .then(response => response.text())
+                .then(text => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Text copied to clipboard');
+                    }).catch(err => {
+                        alert('Failed to copy text: ', err);
+                    });
+                });
+        }
+    </script>
+</body>
+</html></code></pre></div>
+
+<div class='file-section'><h2>base.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\base.html</p><pre><code><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
+    </div>
+</body>
+</html>
+</code></pre></div>
+
+<div class='file-section'><h2>index.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\index.html</p><pre><code>{% extends 'base.html' %}
+
+{% block title %}Home - Repository Analysis{% endblock %}
+
+{% block content %}
+<h1>Repository Analysis</h1>
+
+<!-- Form for Directory Selection -->
+<form method="POST" action="{{ url_for('analyze') }}" style="margin-top: 20px;">
+    <div style="margin-bottom: 20px;">
+        <label for="directory">Directory to Analyze:</label><br>
+        <!-- Pre-populate with the root directory of the repo and make the input field larger -->
+        <input type="text" id="directory" name="directory" value="{{ root_directory }}" style="width: 95%; font-size: 16px; padding: 8px;" required>
+        <!-- Button to choose another directory -->
+        <button type="button" onclick="chooseDirectory()" style="margin-top: 10px;">Choose Another Directory</button>
+    </div>
+    
+    <!-- Button to initiate analysis -->
+    <button type="submit" style="margin-top: 20px;">Get to Analyzing</button>
+</form>
+
+<script>
+    function chooseDirectory() {
+        // Use the file input dialog to select a directory (depends on the platform)
+        // This is a placeholder; handling directory selection dynamically depends on the web browser and may require server-side handling
+        alert("Directory selection feature depends on browser capabilities and requires additional setup.");
+    }
+</script>
+{% endblock %}</code></pre></div></code></pre></div>
+
+<div class='file-section'><h2>analysis_complete.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\analysis_complete.html</p><pre><code><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Complete</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .header-container {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .header-container h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header-container p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .report-wrapper {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+            white-space: pre-wrap; /* Ensure text is wrapped */
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section h2 {
+            margin-top: 0;
+        }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .button {
+            color: white;
+            background-color: #007bff;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Analysis Complete</h1>
+        <p>Processed {{ progress['details'] }}</p>
+        <p>Number of Lines Analyzed: {{ progress['lines_analyzed'] }}</p>
+        <p>Number of Characters Analyzed: {{ progress['characters_analyzed'] }}</p>
+    </div>
+
+    <div class="report-wrapper">
+        {{ report_content|safe }}
+    </div>
+
+    <div class="button-container">
+        <button onclick="copyToClipboard()" class="button">Copy to Clipboard</button>
+        <a href="{{ url_for('trigger_gpt') }}" class="button">Send to GPT</a>
+        <a href="{{ url_for('index') }}" class="button">Back to Home</a>
+    </div>
+
+    <script>
+        function copyToClipboard() {
+            fetch('/static/processed_transcripts/repo_summary.txt')
+                .then(response => response.text())
+                .then(text => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Text copied to clipboard');
+                    }).catch(err => {
+                        alert('Failed to copy text: ', err);
+                    });
+                });
+        }
+    </script>
+</body>
+</html></code></pre></div>
+
+<div class='file-section'><h2>base.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\base.html</p><pre><code><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
+    </div>
+</body>
+</html>
+</code></pre></div>
+
+<div class='file-section'><h2>index.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\index.html</p><pre><code>{% extends 'base.html' %}
+
+{% block title %}Home - Repository Analysis{% endblock %}
+
+{% block content %}
+<h1>Repository Analysis</h1>
+
+<!-- Form for Directory Selection -->
+<form method="POST" action="{{ url_for('analyze') }}" style="margin-top: 20px;">
+    <div style="margin-bottom: 20px;">
+        <label for="directory">Directory to Analyze:</label><br>
+        <!-- Pre-populate with the root directory of the repo and make the input field larger -->
+        <input type="text" id="directory" name="directory" value="{{ root_directory }}" style="width: 95%; font-size: 16px; padding: 8px;" required>
+        <!-- Button to choose another directory -->
+        <button type="button" onclick="chooseDirectory()" style="margin-top: 10px;">Choose Another Directory</button>
+    </div>
+    
+    <!-- Button to initiate analysis -->
+    <button type="submit" style="margin-top: 20px;">Get to Analyzing</button>
+</form>
+
+<script>
+    function chooseDirectory() {
+        // Use the file input dialog to select a directory (depends on the platform)
+        // This is a placeholder; handling directory selection dynamically depends on the web browser and may require server-side handling
+        alert("Directory selection feature depends on browser capabilities and requires additional setup.");
+    }
+</script>
+{% endblock %}</code></pre></div></code></pre></div>
+
+<div class='file-section'><h2>analysis_complete.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\analysis_complete.html</p><pre><code class='language-python'><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analysis Complete</title>
+    <!-- Include Prism.js CSS -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/themes/prism.min.css" rel="stylesheet" />
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        .header-container {
+            position: sticky;
+            top: 0;
+            background-color: #fff;
+            padding: 20px;
+            border-bottom: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .header-container h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        .header-container p {
+            margin: 5px 0;
+            font-size: 16px;
+        }
+        .report-wrapper {
+            max-width: 100%;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+            font-size: 16px;
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-bottom: 20px;
+            white-space: pre-wrap; /* Ensure text is wrapped */
+            overflow-wrap: break-word; /* Ensure text is wrapped */
+            word-wrap: break-word; /* Ensure text is wrapped */
+            box-sizing: border-box;
+        }
+        .file-section h2 {
+            margin-top: 0;
+        }
+        .button-container {
+            position: sticky;
+            bottom: 0;
+            background-color: #fff;
+            padding: 10px 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            border-top: 1px solid #ddd;
+            z-index: 1000;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        .button {
+            color: white;
+            background-color: #007bff;
+            padding: 15px 30px;
+            border-radius: 5px;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header-container">
+        <h1>Analysis Complete</h1>
+        <p>Processed {{ progress['details'] }}</p>
+        <p>Number of Lines Analyzed: {{ progress['lines_analyzed'] }}</p>
+        <p>Number of Characters Analyzed: {{ progress['characters_analyzed'] }}</p>
+    </div>
+
+    <div class="report-wrapper">
+        {{ report_content|safe }}
+    </div>
+
+    <div class="button-container">
+        <button onclick="copyToClipboard()" class="button">Copy to Clipboard</button>
+        <a href="{{ url_for('trigger_gpt') }}" class="button">Send to GPT</a>
+        <a href="{{ url_for('index') }}" class="button">Back to Home</a>
+    </div>
+
+    <!-- Include Prism.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.25.0/prism.min.js"></script>
+    <script>
+        function copyToClipboard() {
+            fetch('/static/processed_transcripts/repo_summary.txt')
+                .then(response => response.text())
+                .then(text => {
+                    navigator.clipboard.writeText(text).then(() => {
+                        alert('Text copied to clipboard');
+                    }).catch(err => {
+                        alert('Failed to copy text: ', err);
+                    });
+                });
+        }
+    </script>
+</body>
+</html></code></pre></div>
+
+<div class='file-section'><h2>base.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\base.html</p><pre><code class='language-python'><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Repository Analysis{% endblock %}</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-top: 20px;
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        {% block content %}
+        <!-- Page-specific content will be inserted here -->
+        {% endblock %}
+    </div>
+</body>
+</html>
+</code></pre></div>
+
+<div class='file-section'><h2>index.html</h2><p>### File Path: C:\Users\jnhoward\OneDrive - Campbellsville University\Documents\Git\repo_analyzer\templates\index.html</p><pre><code class='language-python'>{% extends 'base.html' %}
+
+{% block title %}Home - Repository Analysis{% endblock %}
+
+{% block content %}
+<h1>Repository Analysis</h1>
+
+<!-- Form for Directory Selection -->
+<form method="POST" action="{{ url_for('analyze') }}" style="margin-top: 20px;">
+    <div style="margin-bottom: 20px;">
+        <label for="directory">Directory to Analyze:</label><br>
+        <!-- Pre-populate with the root directory of the repo and make the input field larger -->
+        <input type="text" id="directory" name="directory" value="{{ root_directory }}" style="width: 95%; font-size: 16px; padding: 8px;" required>
+        <!-- Button to choose another directory -->
+        <button type="button" onclick="chooseDirectory()" style="margin-top: 10px;">Choose Another Directory</button>
+    </div>
+    
+    <!-- Button to initiate analysis -->
+    <button type="submit" style="margin-top: 20px;">Get to Analyzing</button>
+</form>
+
+<script>
+    function chooseDirectory() {
+        // Use the file input dialog to select a directory (depends on the platform)
+        // This is a placeholder; handling directory selection dynamically depends on the web browser and may require server-side handling
+        alert("Directory selection feature depends on browser capabilities and requires additional setup.");
+    }
+</script>
+{% endblock %}</code></pre></div>
