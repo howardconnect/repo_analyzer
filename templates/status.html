@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Repository Analysis Status</title>
+    <meta http-equiv="refresh" content="5"> <!-- Refresh every 5 seconds -->
+</head>
+<body>
+    <h1>Analysis Status</h1>
+    <p>{{ progress['status'] }}</p>
+    
+    {% if 'complete' in progress['status'].lower() %}
+    <button onclick="window.location.href='/view_transcript'">View Transcript</button>
+    <button onclick="window.location.href='/send_to_robot'">Send to Repo Robot</button>
+    {% endif %}
+    
+    <a href="/">Back to Home</a>
+</body>
+</html>
