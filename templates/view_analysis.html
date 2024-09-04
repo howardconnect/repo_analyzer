@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repository Analysis Status</title>
-    <meta http-equiv="refresh" content="5"> <!-- Refresh every 5 seconds -->
+    <title>View Analysis Results</title>
     <style>
         body {
             display: flex;
@@ -20,6 +19,20 @@
             background: white;
             border-radius: 15px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            max-height: 80vh;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        pre {
+            text-align: left;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 60vh;
+            overflow-y: auto;
         }
         button {
             margin-top: 20px;
@@ -36,17 +49,27 @@
             background-color: #0056b3;
         }
     </style>
+    <script>
+        function copyToClipboard() {
+            const text = document.getElementById('analysis-text').innerText;
+            navigator.clipboard.writeText(text).then(function() {
+                alert('Text copied to clipboard!');
+            }, function(err) {
+                console.error('Failed to copy text: ', err);
+            });
+        }
+    </script>
 </head>
 <body>
     <div class="container">
-        <h1>Analysis Status</h1>
-        <p>{{ progress['status'] }}</p>
-        {% if 'complete' in progress['status'].lower() %}
-        <a href="/view_analysis"><button>View Analysis Results</button></a>
+        <h1>Analysis Results</h1>
+        <pre id="analysis-text">{{ content }}</pre>
+        <button onclick="copyToClipboard()">Copy Entire Analysis</button>
         <form method="post" action="/send_to_gpt">
             <button type="submit">Send to GPT</button>
         </form>
-        {% endif %}
+        <button onclick="window.location.href='/card_view'">Switch to Card View</button>
+        <button onclick="window.location.href='/view_analysis'">Back to Transcript View</button>
         <a href="/"><button>Back to Home</button></a>
     </div>
 </body>

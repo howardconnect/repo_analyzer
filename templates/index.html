@@ -1,14 +1,65 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Repository Analysis</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        .container {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        input[type="file"] {
+            display: none;
+        }
+    </style>
+    <script>
+        function openDirectoryPicker() {
+            document.getElementById('directory-picker').click();
+        }
+
+        function handleDirectorySelection(event) {
+            const directoryPath = event.target.files[0].webkitRelativePath.split('/')[0];
+            document.getElementById('repo_path').value = directoryPath;
+        }
+    </script>
 </head>
 <body>
-    <h1>Analyze Repository</h1>
-    <form method="post">
-        <label for="repo_path">Repository Path:</label>
-        <input type="text" id="repo_path" name="repo_path" required>
-        <button type="submit">Start Analysis</button>
-    </form>
+    <div class="container">
+        <h1>Analyze Repository</h1>
+        <form method="post">
+            <input type="text" id="repo_path" name="repo_path" value="{{ repo_path }}" required>
+            <button type="submit">Start Analysis</button>
+        </form>
+        <button onclick="openDirectoryPicker()">Choose Another Directory</button>
+        <input type="file" id="directory-picker" webkitdirectory multiple onchange="handleDirectorySelection(event)">
+        <br>
+        <button onclick="window.location.href='/exit'">Exit Application</button>
+    </div>
 </body>
 </html>
